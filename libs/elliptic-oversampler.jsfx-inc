@@ -1,0 +1,157 @@
+desc:sault :: elliptic oversampler
+
+/*
+
+  basic usage:
+
+  s0.os_init2();
+  
+  process(s0.y1);
+  process(s0.y0);
+
+  spl0 = s0.os_down2();
+
+	default cutoff is srate/oversamplingFactor * 0.4
+
+*/
+
+import elliptic-lp.jsfx-inc
+
+@init
+
+//---- 2x
+
+function os_init2()
+ instance( up down )
+(
+  up.ellipticLP_set(0.4);
+  down.ellipticLP_set(0.4);
+);
+
+
+function os_up2(x)
+ instance( up y0 y1 )
+(
+  y1 = up.ellipticLP(x * 2);
+  y0 = up.ellipticLP(0);
+);
+
+function os_down2()
+ instance( out down y0 y1 )
+(
+  down.ellipticLP(y1);
+  down.ellipticLP(y0);
+);
+
+//---- 4x
+
+function os_init4()
+ instance( up down )
+(
+  up.ellipticLP_set(0.2);
+  down.ellipticLP_set(0.2);
+);
+
+function os_up4(x)
+ instance( up y0 y1 y2 y3 )
+(
+  y3 = up.ellipticLP(x * 4);
+  y2 = up.ellipticLP(0);
+  y1 = up.ellipticLP(0);
+  y0 = up.ellipticLP(0);
+);
+
+function os_down4()
+ instance( down y0 y1 y2 y3 )
+(
+  down.ellipticLP(y3);
+  down.ellipticLP(y2);
+  down.ellipticLP(y1);
+  down.ellipticLP(y0);
+);  
+
+//---- 8x
+
+function os_init8()
+ instance( up down )
+(
+  up.ellipticLP_set(0.1);
+  down.ellipticLP_set(0.1);
+);
+
+function os_up8(x)
+ instance( up y0 y1 y2 y3 y4 y5 y6 y7 )
+(
+  y7 = up.ellipticLP(x * 8);
+  y6 = up.ellipticLP(0);
+  y5 = up.ellipticLP(0);
+  y4 = up.ellipticLP(0);
+  y3 = up.ellipticLP(0);
+  y2 = up.ellipticLP(0);
+  y1 = up.ellipticLP(0);
+  y0 = up.ellipticLP(0);
+);
+
+function os_down8()
+ instance( down y0 y1 y2 y3 y4 y5 y6 y7 )
+(
+  down.ellipticLP(y7);
+  down.ellipticLP(y6);
+  down.ellipticLP(y5);
+  down.ellipticLP(y4);
+  down.ellipticLP(y3);
+  down.ellipticLP(y2);
+  down.ellipticLP(y1);
+  down.ellipticLP(y0);
+);  
+
+//---- 16x
+
+function os_init16()
+ instance( up down )
+(
+  up.ellipticLP_set(0.05);
+  down.ellipticLP_set(0.05);
+);
+
+function os_up16(x)
+ instance( up y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11 y12 y13 y14 y15 )
+(
+  y15 = up.ellipticLP(x * 16);
+  y14 = up.ellipticLP(0);
+  y13 = up.ellipticLP(0);
+  y12 = up.ellipticLP(0);
+  y11 = up.ellipticLP(0);
+  y10 = up.ellipticLP(0);
+  y9 = up.ellipticLP(0);
+  y8 = up.ellipticLP(0);
+  y7 = up.ellipticLP(0);
+  y6 = up.ellipticLP(0);
+  y5 = up.ellipticLP(0);
+  y4 = up.ellipticLP(0);
+  y3 = up.ellipticLP(0);
+  y2 = up.ellipticLP(0);
+  y1 = up.ellipticLP(0);
+  y0 = up.ellipticLP(0);
+);
+
+function os_down16()
+ instance( down y0 y1 y2 y3 y4 y5 y6 y7 y8 y9 y10 y11 y12 y13 y14 y15 )
+(
+  down.ellipticLP(y15);
+  down.ellipticLP(y14);
+  down.ellipticLP(y13);
+  down.ellipticLP(y12);
+  down.ellipticLP(y11);
+  down.ellipticLP(y10);
+  down.ellipticLP(y9);
+  down.ellipticLP(y8);
+  down.ellipticLP(y7);
+  down.ellipticLP(y6);
+  down.ellipticLP(y5);
+  down.ellipticLP(y4);
+  down.ellipticLP(y3);
+  down.ellipticLP(y2);
+  down.ellipticLP(y1);
+  down.ellipticLP(y0);
+);  

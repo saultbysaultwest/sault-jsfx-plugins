@@ -1,0 +1,474 @@
+//
+//   ...o0* Formant Function *0o...
+//
+//         ("form and function")
+//
+//          v 2.1
+//
+// by Sault
+//
+// A highly customizable, sweepable, "singing" formant filter.
+// (automate slider5 to see what I mean)
+//
+// many thanks to Stillwell for RBJ4EQ, Loser for Saturation, and
+// schwa for soft clipper, parts of which were all used in the making
+// of this plugin.
+//
+//
+// Changelog
+//
+// v2.1
+//
+// * added bass formants, both male vowels and instrument-derived
+// * added side-chaining from 3&4 and "auto-chaining" from 1&2
+// * added RMS smoothing for side-chaining and auto-chaining
+// * Side-chaining and auto-chaining automates slider5
+// * renamed formants to be more descriptive
+// * added more limiting options
+
+
+desc:sault ::: sweepable formant filter
+
+slider1:3<0,7,1{male-aww,male-eh,male-oo,male-ee,detuned,bass,dub,sub}>Bass formant
+slider2:3<0,7,1{female-ee,female-oo,female-eh,child-oo,child-eh,child-aa,scream,shriek}>Treble formant
+slider3:4000<2000,8000,1>Presence (Hz)
+slider4:0<0,30,0.1>Presence level (dB)
+slider5:0<0,1,0.01>Sing! (Automate me!!!)
+slider6:1<0,5,1{slow,quick,down-up-down,up-down-up,linear,in-the-middle}>Transition
+slider7:1.5<0.5,5,0.01>Q Sharpness
+slider8:2<0,2,1{off,sidechain 3&4,autowah 1&2}>Sidechain/Autowah
+slider9:6<-30,30,0.1>Sidechain sensitivity (dB)
+slider10:0<0,100,1>Saturation
+slider11:0<-30,30,0.1>Output Volume (dB)
+slider12:1<0,1,1{off,on,soft+boost,moar,wayMoar}>limit output
+
+
+@init
+
+  outgain = 2^(slider11/6);
+  sharpness = slider7;
+
+  sensitivity = 2^(slider9/6);
+
+// Set relative volumes for formants in dB
+// Higher Q's lose a lot of signal, so we're
+// boosting each band by a lot.
+
+  f1gain = 12;
+  f2gain = 8;
+  f3gain = 10;
+  f4gain = slider4;
+
+  foo = slider10/200*$pi;
+  bar = sin(slider10/200*$pi);
+
+  amp_dB = 8.6562;
+  threshold_dB = -6.0;
+  limit_dB = -0.2;
+  a = 1.017;
+  b = -0.025;
+
+
+  slider12 == 1 ? (
+    boost_dB = 0;
+    threshold_dB = -6;
+    );
+
+  slider12 == 2 ? (
+    boost_dB = 3;
+    threshold_dB = -9;
+    );
+
+  slider12 == 3 ? (
+    boost_dB = 6;
+    threshold_dB = -12;
+    );
+
+  slider12 == 4 ? (
+    boost_dB = 9;
+    thrshold_dB = 15;
+    );
+
+
+
+// Setting up an RBJ bandpass as a function
+// so I can have it as multiple instances, one
+// per band. Call rbj_bp_init to set or change
+// its characteristics, call rbj_bp to do
+// the biquad.
+
+
+function rbj_bp_init(freq, Q, gain)
+ instance(w0, cosw0, sinw0, alpha, a1)
+(
+  a1 = (2^(gain/6));
+  w0 = 2 * $pi * freq/srate;
+  cosw0 = cos(w0);
+  sinw0 = sin(w0);
+  alpha = sinw0 / (2 * Q);
+
+  this.b01 = alpha;
+  this.b11 = 0;
+  this.b21 = -alpha;
+  this.a01 = 1 + alpha;
+  this.a11 = -2 * cosw0;
+  this.a21 = 1 - alpha;
+  this.b01 /= this.a01;
+  this.b11 /= this.a01;
+  this.b21 /= this.a01;
+  this.a11 /= this.a01;
+  this.a21 /= this.a01;
+);
+
+
+function rbj_bp(in)
+ instance(oin, out)
+(
+  oin = in;
+  out = this.b01 * in + this.b11 * this.xr11 + this.b21 * this.xr21 - this.a11 * this.yr11 - this.a21 * this.yr21;
+  this.xr21 = this.xr11;
+  this.xr11 = this.oin;
+  this.yr21 = this.yr11;
+  this.yr11 = out;
+  out*this.a1;
+);
+
+
+// Formant table reworked with lower-pitched formants included
+
+  fm = 0;
+
+// male "pot"
+
+  fm[0] = 570;    fm[1]   = 8;
+  fm[2] = 850;    fm[3]   = 8.5;
+  fm[4] = 2400;   fm[5]   = 11.5; 
+
+// male "pert"
+
+  fm[6] = 490;    fm[7]   = 4;
+  fm[8] = 1350;   fm[9]   = 13.5;
+  fm[10] = 1700;  fm[11]  = 7.2;
+
+// male "book"
+
+  fm[12] =  300;  fm[13]  = 6.3;
+  fm[14] =  850;  fm[15]  = 8.5;
+  fm[16] = 2250;  fm[17]  = 10.2;
+
+// male "beat"
+
+  fm[18]  = 270;  fm[19]  = 5.1;
+  fm[20]  = 2300; fm[21]  = 15;
+  fm[22]  = 3000; fm[23]  = 14.2;
+
+// detuned guitar
+
+  fm[24] = 160;   fm[25]  = 6;
+  fm[26] = 600;   fm[27]  = 8;
+  fm[28] = 2500;  fm[29]  = 10;
+
+// bass guitar
+
+  fm[30] = 120;   fm[31]  = 8;
+  fm[32] = 650;   fm[33]  = 6;
+  fm[34] = 2500;  fm[35]  = 12.1;
+
+// dub
+
+  fm[36] = 60;    fm[37]  = 6;
+  fm[38] = 900;   fm[39]  = 8;
+  fm[40] = 2700;  fm[41]  = 15;
+
+// sub-bass
+
+  fm[42] = 40;    fm[43]  = 6;
+  fm[44] = 600;   fm[45]  = 8;
+  fm[46] = 1300;  fm[47]  = 15;
+
+
+// Treble formants
+
+
+// female "beat"
+
+  fm[50]  = 300;  fm[51]  = 5.5;
+  fm[52]  = 2800; fm[53]  = 14;
+  fm[54]  = 3300; fm[55]  = 15.8;
+
+// female "book"
+
+  fm[56] = 370;   fm[57]  = 5.8;
+  fm[58] = 950;   fm[59]  = 9.5;
+  fm[60] = 2650;  fm[61]  = 12.3; 
+
+// female "pert"
+
+  fm[62] = 500;   fm[63]  = 6.8;
+  fm[64] = 1650;  fm[65]  = 12.5;
+  fm[66] = 1950;  fm[67]  = 8.5;
+
+// child "book"
+
+  fm[68] = 560;   fm[69]  = 7.3;
+  fm[70] = 1400;  fm[71]  = 10;
+  fm[72] = 3300;  fm[73]  = 13.8; 
+
+// child "pert"
+
+  fm[74] = 560;   fm[75]  = 7.3;
+  fm[76] = 1650;  fm[77]  = 12.5;
+  fm[78] = 2150;  fm[79]  = 11.6;
+
+// child "bat"
+
+  fm[80] = 1000;  fm[81]  = 10.7;
+  fm[82] = 2300;  fm[83]  = 11;
+  fm[84] = 3300;  fm[85]  = 15.8;
+
+// scream
+
+  fm[86] = 580;   fm[87]  = 5;
+  fm[88] = 2800;  fm[89]  = 15;
+  fm[90] = 4200;  fm[91]  = 12;
+
+// shriek
+
+  fm[92] = 1200;  fm[93]  = 5;
+  fm[94] = 3000;  fm[95]  = 15;
+  fm[96] = 5000;  fm[97]  = 12;
+
+// I need an RMS for my side-chain and auto-wah functions...
+
+
+function RMS(input, ms)
+  instance(out, rms_s )
+(
+  coeff = exp(-1/(ms / 1000 * srate)); // usually 0.999..
+  rms_s = (rms_s * coeff) + ((1 - coeff) * input * input);
+  out = sqrt(rms_s);
+  out;
+);
+
+
+
+// Here are the transfer functions
+// [ pow, root, frown, smile, line, notch ]
+
+
+function transfer(type, vala, valb, trans)
+ instance (out, range)
+(
+  range = valb - vala;
+
+  type == 0 ? trans ^= 3;
+  type == 1 ? trans ^= 0.6;
+  type == 2 ? trans = 1-sin($pi * trans);
+  type == 3 ? trans = sin($pi * trans);
+  type == 4 ? trans = trans;
+  type == 5 ? trans = abs( cos($pi * trans));
+
+ out = (trans*range) + vala;
+ out;
+);
+
+
+// Load Formants
+
+  index1 = slider1 * 6;
+  index2 = 50 + slider2 * 6;
+
+  f1Hza = index1[0];     f1Qa = index1[1];
+  f2Hza = index1[2];     f2Qa = index1[3];
+  f3Hza = index1[4];     f3Qa = index1[5];
+  f4Hza = slider3 - 300; f4Qa = 12;
+
+  f1Hzb = index2[0];     f1Qb = index2[1];
+  f2Hzb = index2[2];     f2Qb = index2[3];
+  f3Hzb = index2[4];     f3Qb = index2[5];
+  f4Hzb = slider3 + 300; f4Qb = 11;
+
+// Our transfer function takes our Sing! slider
+// and translates it to a value between Hza and Hzb, etc.
+// Our choice of transfer function determines
+// how the filter reacts to the slider.
+
+
+  f1Hz = transfer(slider6, f1Hza, f1Hzb, slider5);
+  f2Hz = transfer(slider6, f2Hza, f2Hzb, slider5);
+  f3Hz = transfer(slider6, f3Hza, f3Hzb, slider5);
+  f4Hz = transfer(slider6, f4Hza, f4Hzb, slider5);
+
+  f1Q = transfer(slider6, f1Qa, f1Qb, slider5);
+  f2Q = transfer(slider6, f2Qa, f2Qb, slider5);
+  f3Q = transfer(slider6, f3Qa, f3Qb, slider5);
+  f4Q = transfer(slider6, f4Qa, f4Qb, slider5);
+
+  f1Q *= sharpness;
+  f2Q *= sharpness;
+  f3Q *= sharpness;
+  f4Q *= sharpness;
+
+
+  formant10.rbj_bp_init( f1Hz, f1Q, f1gain );
+  formant20.rbj_bp_init( f2Hz, f2Q, f2gain );
+  formant30.rbj_bp_init( f3Hz, f3Q, f3gain );
+  formant40.rbj_bp_init( f4Hz, f4Q, f4gain );
+
+  formant11.rbj_bp_init( f1Hz, f1Q, f1gain );
+  formant21.rbj_bp_init( f2Hz, f2Q, f2gain );
+  formant31.rbj_bp_init( f3Hz, f3Q, f3gain );
+  formant41.rbj_bp_init( f4Hz, f4Q, f4gain );
+
+@slider
+
+  sharpness = slider7;
+
+  foo = slider10/200*$pi;
+  bar = sin(slider10/200*$pi);
+
+  f4gain = slider4;
+
+  outgain = 2^(slider11/6);
+  sensitivity = 2^(slider9/6);
+
+   slider12 == 1 ? (
+    boost_dB = 0;
+    threshold_dB = -6;
+    );
+
+  slider12 == 2 ? (
+    boost_dB = 3;
+    threshold_dB = -9;
+    );
+
+  slider12 == 3 ? (
+    boost_dB = 6;
+    threshold_dB = -12;
+    );
+
+  slider12 == 4 ? (
+    boost_dB = 9;
+    thrshold_dB = 15;
+    );
+
+  index1 = slider1 * 6;
+  index2 = 50 + slider2 * 6;
+
+  f1Hza = index1[0];     f1Qa = index1[1];
+  f2Hza = index1[2];     f2Qa = index1[3];
+  f3Hza = index1[4];     f3Qa = index1[5];
+  f4Hza = slider3 - 300; f4Qa = 12;
+
+  f1Hzb = index2[0];     f1Qb = index2[1];
+  f2Hzb = index2[2];     f2Qb = index2[3];
+  f3Hzb = index2[4];     f3Qb = index2[5];
+  f4Hzb = slider3 + 300; f4Qb = 11;
+
+
+
+@sample
+
+  sing = slider5;
+
+slider8 == 1 ? (
+  spl3 > spl2 ? (sing = spl3) : (sing = spl2);
+  );
+
+slider8 == 2 ? (
+  spl1 > spl0 ? (sing = spl1) : (sing = spl0);
+  );
+
+
+slider8 ? (
+  sing *= sensitivity;
+  sing = singer.RMS(sing,10);
+  slider5 = sing;
+  sliderchange(slider5);
+);
+
+  sing = max(min(sing,1),-1);
+
+
+  f1Hz = transfer(slider6, f1Hza, f1Hzb, sing);
+  f2Hz = transfer(slider6, f2Hza, f2Hzb, sing);
+  f3Hz = transfer(slider6, f3Hza, f3Hzb, sing);
+  f4Hz = transfer(slider6, f4Hza, f4Hzb, sing);
+
+  f1Q = transfer(slider6, f1Qa, f1Qb, sing);
+  f2Q = transfer(slider6, f2Qa, f2Qb, sing);
+  f3Q = transfer(slider6, f3Qa, f3Qb, sing);
+  f4Q = transfer(slider6, f4Qa, f4Qb, sing);
+
+  f1Q *= sharpness;
+  f2Q *= sharpness;
+  f3Q *= sharpness;
+  f4Q *= sharpness;
+
+  formant10.rbj_bp_init( f1Hz, f1Q, f1gain );
+  formant20.rbj_bp_init( f2Hz, f2Q, f2gain );
+  formant30.rbj_bp_init( f3Hz, f3Q, f3gain );
+  formant40.rbj_bp_init( f4Hz, f4Q, f4gain );
+
+  formant11.rbj_bp_init( f1Hz, f1Q, f1gain );
+  formant21.rbj_bp_init( f2Hz, f2Q, f2gain );
+  formant31.rbj_bp_init( f3Hz, f3Q, f3gain );
+  formant41.rbj_bp_init( f4Hz, f4Q, f4gain );
+
+
+  band1L = formant10.rbj_bp(spl0);
+  band2L = formant20.rbj_bp(spl0);
+  band3L = formant30.rbj_bp(spl0);
+  band4L = formant40.rbj_bp(spl0);
+
+  band1R = formant11.rbj_bp(spl1);
+  band2R = formant21.rbj_bp(spl1);
+  band3R = formant31.rbj_bp(spl1);
+  band4R = formant41.rbj_bp(spl1);
+
+  spl0 = band1L + band2L + band3L + band4L;
+  spl1 = band1R + band2R + band3R + band4R;
+
+
+// Apply doubled up Loser saturation, if desired.
+
+slider10 ? (
+
+  spl0 = min(max( sin(max(min(spl0,1),-1)*foo)/bar ,-1) ,1);
+  spl1 = min(max( sin(max(min(spl1,1),-1)*foo)/bar ,-1) ,1);
+
+  spl0 = min(max( sin(max(min(spl0,1),-1)*foo)/bar ,-1) ,1);
+  spl1 = min(max( sin(max(min(spl1,1),-1)*foo)/bar ,-1) ,1);
+);
+
+
+// Output gain
+
+spl0 *= outgain;
+spl1 *= outgain;
+
+
+// Schwa's soft clipper, functioning as a limiter.
+
+slider12 ? (
+
+  dB0 = amp_dB * log(abs(spl0)) + boost_dB;
+  dB1 = amp_dB * log(abs(spl1)) + boost_dB;
+
+  (dB0 > threshold_dB) ? (
+    over_dB = dB0 - threshold_dB;
+    over_dB = a * over_dB + b * over_dB * over_dB;
+    dB0 = min(threshold_dB + over_dB, limit_dB);
+  );
+
+  (dB1 > threshold_dB) ? (
+    over_dB = dB1 - threshold_dB;
+    over_dB = a * over_dB + b * over_dB * over_dB;
+    dB1 = min(threshold_dB + over_dB, limit_dB);
+  );
+
+  spl0 = exp(dB0 / amp_dB) * sign(spl0);
+  spl1 = exp(dB1 / amp_dB) * sign(spl1);
+);
+
+// EOF

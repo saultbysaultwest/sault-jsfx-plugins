@@ -1,0 +1,317 @@
+desc: sault ::: Super Slaw
+
+/*
+	This is a mono synth loosely based on a Roland Super Saw.
+	The goal was something that sounded huge and fat.
+
+	* five selectable waveforms based around the sin() function
+	* FM modulation (because sin mod sin approximates a sawtooth)
+	* smoothing filters
+	* sin() curve saturation
+	* up to 11 free-running oscillators
+	* give 'em a wide stereo spread or narrow them all to mono
+	* controllable amounts of detuning
+	* blend controls the balance between the mono frequency and
+	  the other detuned frequencies, a la the "mix" knob on the Super Saw
+
+	Many thanks to Smashed Transistor for his Attack/Release code.
+	I hope you enjoy. 
+
+	~SaulT
+	2016-10-11
+
+	v 1.0 alpha release
+	v 1.1 update 9 years later, SVF removed, minor tweaks
+
+*/
+
+
+slider2:-6<-30,6,1>Volume (dB)
+slider3:1<1,500,1>Glide (ms)
+
+slider5:0<0,3,1{5,7,9,11}>Voices
+slider6:1<0,2,0.01>Detune :: None <--> Very
+slider7:0.2<0,2,0.001>Mod Index
+slider8:0<0,15,0.1>Preamp (dB)
+slider9:0<0,4,1{sin,sin4,sin-assym,2sin3,sqr-sin}>Waveform
+slider10:0.05<0,0.5,0.01>Smooth (ms)
+slider11:1<0,1,0.01>Width :: Mono <--> Stereo
+slider12:0.5<0,1,0.01>Blend :: Center Freq <--> Detuned
+slider13:1<0.2,3,0.1>Mids :: More <--> Less
+
+slider15:sl_A=-2<-2,3,0.001>Attack
+slider16:sl_R=-0.5<-1,0.5,0.001>Release
+
+@init
+
+  d_coeff = exp(-1/(100/1000*srate));
+  voices = 2*slider5 + 5;
+  ivoices = 1/voices;
+  israte = 1/srate;
+  vol_adj = 1/sqrt(voices);
+  spread = sin($pi*0.5*slider11);
+  oversample = 1;
+  ctr = 0;
+
+function get_waveformA(phase) (
+  phase >= 1 ? phase -= 2;
+  phase < -1 ? phase += 2;
+  sin($pi*phase);
+  );
+
+function get_waveformB(phase) (
+  phase >= 1 ? phase -= 2;
+  phase < -1 ? phase += 2;
+  0.54*(sin($pi*phase^4)/phase+sin($pi*phase));
+  );
+
+function get_waveformC(phase) (
+  phase >= 1 ? phase -= 2;
+  phase < -1 ? phase += 2;
+  phase > 0 ? sin($pi*phase)^13 : sin($pi*phase)^3;
+  );
+
+function get_waveformD(phase) (
+  phase >= 1 ? phase -= 2;
+  phase < -1 ? phase += 2;
+  sin(2*$pi*phase^3);
+);
+
+function get_waveformE(phase) (
+  phase >= 1 ? phase -= 2;
+  phase < -1 ? phase += 2;
+  1.33*(sin($pi*phase)^0.2)/(2+phase);
+  );
+
+
+function setd(d) ( (1-d)/(d+1); );
+
+function thiran(in)
+ instance(d,u,y1,x1)
+(
+  u = d * (in - y1) + x1;
+  x1 = in;
+  y1 = u;
+);
+
+function singlepole(in,target,coeff) ( in*coeff + target*(1-coeff); );
+
+function cubic6(x) (
+  (abs(x)>1.4142135623) ? sign(x)*0.9428090416 : (x-(x*x*x)/6);
+  );
+
+function fade(x) ( 0.9*sin(0.5*$pi*x)^2+0.1; );
+function fade2(x) ( 1.1-sin(0.5*$pi*x); );
+
+function osc_phase(p) ( this.phase = p; );
+function osc_detune(x) ( 2^(x/1200); );
+function osc_mod(x) ( this.mod = x; );
+function osc_newd() ( this.nd = setd( rand(0.5) ); );
+
+function osc_pan(x) (
+  this.pan_L = cos($pi*0.5*x)^2;
+  this.pan_R = sin($pi*0.5*x)^2;
+);
+
+function osc_init(oversample,detune_cents)
+(
+  this.factor = oversample;
+  this.detune = 2^(detune_cents/1200);
+  this.nd = setd( rand(0.5) );
+);
+
+function osc_process()
+  instance(phase,factor,dt,ndt,prev_output,mod,detune,prev_phase,mod_output,
+           out0,out1,pan_L,pan_R,output,d,nd,td)
+(
+  ndt = (global.freq*detune)/(srate*factor);
+  dt = singlepole(dt,ndt,glide_coeff);
+  mod_index = singlepole(mi_old,target_mod_index,mi_coeff);
+  mi_old = mod_index;
+  mod_output = sin($pi*prev_phase);
+  global.waveform == 0 ? output = 0.5*(prev_output + get_waveformA(phase + mod_output * mod_index)) :
+  global.waveform == 1 ? output = 0.5*(prev_output + get_waveformB(phase + mod_output * mod_index)) :
+  global.waveform == 2 ? output = 0.5*(prev_output + get_waveformC(phase + mod_output * mod_index)) :
+  global.waveform == 3 ? output = 0.5*(prev_output + get_waveformD(phase + mod_output  * mod_index)) :
+                         output = 0.5*(prev_output + get_waveformE(phase + mod_output  * mod_index));
+
+  td = singlepole(td,nd,d_coeff);
+  d = setd(td);
+  output = this.thiran(output);
+  prev_phase = phase;
+  phase += dt;
+  phase >= 1 ? phase -= 2;
+  phase <= -1 ? phase += 2;
+  prev_output = output;
+  out0 = pan_L * output;
+  out1 = pan_R * output;
+);
+
+function osc_update_pan() (
+  osc0.osc_pan(0.5 - spread * 0.5);
+  osc1.osc_pan(0.5 - spread * 0.45);
+  osc2.osc_pan(0.5 - spread * 0.35);
+  osc3.osc_pan(0.5);
+  osc4.osc_pan(0.5 + spread * 0.35);
+  osc5.osc_pan(0.5 + spread * 0.45);
+  osc6.osc_pan(0.5 + spread * 0.5);
+
+  osc7.osc_pan(0.5 + spread * 0.4);
+  osc8.osc_pan(0.5 - spread * 0.4);
+  osc9.osc_pan(0.5 + spread * 0.48);
+  osc10.osc_pan(0.5 - spread * 0.48);
+  );
+
+function osc_on_note() (
+
+  osc0.osc_phase(-0.9);
+  osc1.osc_phase(-0.5);
+  osc2.osc_phase(-0.25);
+  osc3.osc_phase(0);
+  osc4.osc_phase(0.25);
+  osc5.osc_phase(0.5);
+  osc6.osc_phase(0.9);
+  osc7.osc_phase(-0.7);
+  osc8.osc_phase(0.7);
+  osc9.osc_phase(0.1);
+  osc10.osc_phase(-0.1);
+
+  osc0.osc_newd();
+  osc1.osc_newd();
+  osc2.osc_newd();
+  osc3.osc_newd();
+  osc4.osc_newd();
+  osc5.osc_newd();
+  osc6.osc_newd();
+  osc7.osc_newd();
+  osc8.osc_newd();
+  osc9.osc_newd();
+  osc10.osc_newd();
+
+);
+
+
+@slider
+  vol = 10^(slider2/20); 
+  glide_coeff = exp(-3/(slider3/1000*srate));
+  mi_coeff = exp(-1/(0.050 * srate));
+  global.detune_knob = slider6;
+  target_mod_index = -slider7;
+  preamp = 10^(slider8/20);
+  global.waveform = slider9;
+  smooth_coeffA = exp(-1/(slider10/1000*srate));
+  smooth_coeffB = exp(-1/(slider10/1000*srate));
+  spread = sin($pi*0.5*slider11);
+  mix_knob = sin($pi*0.5*slider12);
+  damp = slider13^1.5;
+  A = 1/(srate*10^sl_A);
+  fR = 1/(srate*10^sl_R);
+  R = 0.5*fR;
+  osc_update_pan();
+  fade_knob = fade(mix_knob);
+
+  osc9.osc_init(1,-83*global.detune_knob);
+  osc7.osc_init(1,-61*global.detune_knob);
+  osc0.osc_init(1,-29*global.detune_knob);
+  osc1.osc_init(1,-13*global.detune_knob);
+  osc2.osc_init(1,-7*global.detune_knob);
+  osc3.osc_init(1,0);
+  osc4.osc_init(1,-5*global.detune_knob);
+  osc5.osc_init(1,-17*global.detune_knob);
+  osc6.osc_init(1,-31*global.detune_knob);
+  osc8.osc_init(1,-59*global.detune_knob);
+  osc10.osc_init(1,-79*global.detune_knob);
+
+
+@block
+while (midirecv(offset, msg1, msg23)) (
+  msg2 = msg23 & 0x7F; msg3 = msg23 >> 8; status = msg1 & $xF0;
+  status == $x80 ? ( status = $x90; msg3 = 0; );
+  status == $x90 ? (
+    msg3 == 0 ? (msg2 == note ? gate = 0;)
+  : ( gate = sqrt(msg3 * (1/127)); note = msg2;
+      global.freq = 440*2^((note-69)*(1/12));
+//      osc_on_note();
+    );
+  );
+  midisend(offset, msg1, msg23);
+);
+
+ctr += 1;
+
+ctr >= 8 ? (
+  osc0.osc_newd();
+  osc1.osc_newd();
+  osc2.osc_newd();
+  osc3.osc_newd();
+  osc4.osc_newd();
+  osc5.osc_newd();
+  osc6.osc_newd();
+  osc7.osc_newd();
+  osc8.osc_newd();
+  osc9.osc_newd();
+  osc10.osc_newd();
+  ctr = 0;
+);
+
+@sample
+
+other0 = other1 = 0;
+
+
+osc1.osc_process();
+osc2.osc_process();
+osc3.osc_process();
+osc4.osc_process();
+osc5.osc_process();
+
+voices > 6 ? (
+  osc0.osc_process();
+  osc6.osc_process();
+
+  other0 += osc0.out0 + osc6.out0;
+  other1 += osc0.out1 + osc6.out1;
+
+  voices > 8 ? (
+    osc7.osc_process();
+    osc8.osc_process();
+    other0 += osc7.out0 + osc8.out0;
+    other1 += osc7.out1 + osc8.out1;
+
+    voices > 10 ? (
+      osc9.osc_process();
+      osc10.osc_process();
+      other0 += osc9.out0 + osc10.out0;
+      other1 += osc9.out1 + osc10.out1;
+      );
+    );
+  );
+
+
+other0 += osc1.out0 + osc2.out0;
+other0 += osc4.out0 + osc5.out0 + osc6.out0;
+
+other1 += osc0.out1 + osc1.out1 + osc2.out1;
+other1 += osc4.out1 + osc5.out1 + osc6.out1;
+
+mix0 = other0 * fade_knob + osc3.out0 * 2 * (1 - fade_knob);
+mix0 *= vol_adj;
+
+nmix0 = singlepole(nmix0,mix0,smooth_coeffA);
+
+preamp ? nmix0 = cubic6(preamp * nmix0);
+out0 = singlepole(out0,nmix0,smooth_coeffB);
+
+mix1 = other1 * fade_knob + osc3.out1 * 2 * (1 - fade_knob);
+mix1 *= vol_adj;
+
+nmix1 = singlepole(nmix1,mix1,smooth_coeffA);
+
+preamp ? nmix1 = cubic6(preamp * nmix1);
+out1 = singlepole(out1,nmix1,smooth_coeffB);
+
+env += (env>gate ? R:A)*(gate-env);
+//fenv += gate ? A*(1-fenv): -fR*fenv;
+
+spl0 += out0 * vol * env;
+spl1 += out1 * vol * env;

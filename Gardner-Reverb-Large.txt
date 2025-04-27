@@ -1,0 +1,131 @@
+desc: sault ::: gardner large room reverb
+
+slider1:-120<-120,0,1>Dry (dB)
+slider2:-6<-120,0,1>Wet (dB)
+slider3:50<1,100,1>Damping (%)
+slider5:200<1,500,1>highpass (Hz)
+slider10:1<0,20,1>Stereo Separation (ms)
+
+
+import libs/st-verb-2.jsfx-inc
+
+@init
+
+function singlepole(in,target,coeff) ( in*coeff + target*(1-coeff); );
+function get_coeff(ms) (exp(-1/(srate*0.001*ms)); );
+function db2ratio(db) ( 10^(db * 0.05); );
+function lp_set(fc) instance(a) ( a = 1 - exp(-2*$pi * fc / srate); );
+function lp(in) instance(lp, a) ( lp += a * (in - lp); );
+function hp_set(fc) instance(a) ( a = 1 - exp(-2*$pi * fc / srate); );
+function hp(in) instance(hp, a) ( hp += a * (in - hp); in - hp; );
+
+wet_gain = db2ratio(slider2);
+dry_gain = db2ratio(slider1);
+damping = 1 - slider3 * 0.01;
+
+sep = slider10;
+
+bufferptr = 10000;
+
+bufferptr = allpass00.allpass_init(bufferptr,8,0.3);
+bufferptr = allpass01.allpass_init(bufferptr,12,0.3);
+
+bufferptr = allpass02.nested_allpass1_init(bufferptr, 87, 62, 0.5, 0.25);
+bufferptr = allpass03.nested_allpass2_init(bufferptr,
+	120, 76, 30,
+	0.5, 0.25, 0.25);
+
+bufferptr = delay00.delayline_init(bufferptr,4);
+bufferptr = delay01.delayline_init(bufferptr,17);
+bufferptr = delay02.delayline_init(bufferptr,31);
+bufferptr = delay03.delayline_init(bufferptr,3);
+
+bufferptr = allpass10.allpass_init(bufferptr,8+sep*0.5,0.3);
+bufferptr = allpass11.allpass_init(bufferptr,12+sep*0.5,0.3);
+
+bufferptr = allpass12.nested_allpass1_init(bufferptr, 87+sep, 62+sep*1.1, 0.5, 0.25);
+bufferptr = allpass13.nested_allpass2_init(bufferptr,
+	120+sep*1.1, 76+sep, 30+sep,
+	0.5, 0.25, 0.25);
+
+bufferptr = delay10.delayline_init(bufferptr,4);
+bufferptr = delay11.delayline_init(bufferptr,17);
+bufferptr = delay12.delayline_init(bufferptr,31);
+bufferptr = delay13.delayline_init(bufferptr,3);
+
+
+lp0.lp_set(2600);
+lp1.lp_set(2600);
+
+hp0.hp_set(slider5);
+hp1.hp_set(slider5);
+
+@slider
+
+wet_gain = db2ratio(slider2);
+dry_gain = db2ratio(slider1);
+damping = 1 - slider3 * 0.01;
+
+hp0.hp_set(slider5);
+hp1.hp_set(slider5);
+
+sep = slider10;
+
+
+@sample
+
+s0 = hp0.hp( spl0 );
+s1 = hp1.hp( spl1 );
+
+
+// channel the first
+
+s00 = allpass00.allpass( s0 + damping * feedback0 );
+s00 = allpass01.allpass( s00 );
+s00 = delay00.delayline(s00);
+
+// ---> s00 is the first tap
+
+s01 = delay01.delayline(s00);
+s01 = allpass02.nested_allpass1( s01 );
+s01 = delay02.delayline(s01);
+
+// ---> s01 is the second tap
+
+s02 = delay03.delayline(s01);
+s02 = allpass03.nested_allpass2( s01 );
+
+// --->  s02 is the third tap
+
+feedback0 = lp0.lp(s02);
+
+out0 = s00 * 0.34 + s01 * 0.14 + s02 * 0.14;
+
+
+// channel the second
+
+s10 = allpass10.allpass( s1 + damping * feedback1 );
+s10 = allpass11.allpass( s10 );
+s10 = delay10.delayline(s10);
+
+// ---> s10 is the first tap
+
+s11 = delay11.delayline(s10);
+s11 = allpass12.nested_allpass1( s11 );
+s11 = delay12.delayline(s11);
+
+// ---> s11 is the second tap
+
+s12 = delay13.delayline(s11);
+s12 = allpass13.nested_allpass2( s11 );
+
+// --->  s12 is the third tap
+
+feedback1 = lp1.lp(s12);
+
+out1 = s10 * 0.34 + s11 * 0.14 + s12 * 0.14;
+
+spl0 = spl0 * dry_gain + out0 * wet_gain;
+spl1 = spl1 * dry_gain + out1 * wet_gain;
+
+

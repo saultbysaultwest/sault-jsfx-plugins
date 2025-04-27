@@ -1,0 +1,103 @@
+desc:st-verb-library
+
+// a collection of reverb algorithms
+
+@init
+
+function delayline_init(buffer,len)
+ instance(buf,size)
+(
+  size = (len * 0.001 * srate)|0;
+  buf = buffer;
+  buf + size;
+);
+
+
+function delayline_get()
+ instance(buf,ptr)
+(
+  buf[ptr];
+);
+
+function delayline(in)
+ instance(buf,ptr,size,out)
+(
+  out = buf[ptr];
+  buf[ptr] = in;
+  ptr += 1;
+  ptr >= size ? ptr -= size;
+  out;
+);
+
+
+function allpass_init(buffer,len,coff)
+ instance(coeff,delay)
+ local(t)
+(
+  t = delay.delayline_init(buffer,len);
+  coeff = coff;
+  t;
+);
+
+
+function allpass(in)
+ instance(buf,size,coeff,ptr,out,delay)
+(
+  out = delay.delayline_get() - in * coeff;
+  delay.delayline( in + out * coeff );
+  out;
+);
+
+
+function nested_allpass1_init(buffer,len0,len1,coff0,coff1)
+ instance(delay,allpass1,coeff)
+ local(t)
+(
+  coeff = coff0;
+  t = delay.delayline_init(buffer,len0);
+  t = allpass1.allpass_init(t,len1,coff1);
+);
+
+
+function nested_allpass1(in)
+ instance(delay,allpass1,coeff,out,out1,in1)
+(
+  out = delay.delayline_get() - in * coeff;
+  in1 = in + out * coeff;
+
+  out1 = allpass1.allpass(in1);
+
+  delay.delayline( out1 );
+  out;
+);
+
+
+function nested_allpass2_init(buffer,
+		len0,len1,len2,coff0,coff1,coff2)
+ instance(delay,allpass1,allpass2,coeff,out0,out1)
+ local(t)
+(
+  coeff = coff0;
+  t = delay.delayline_init(buffer,len0);
+  t = allpass1.allpass_init(t,len1,coff1);
+  t = allpass2.allpass_init(t,len2,coff2);
+);
+
+
+function nested_allpass2(in)
+ instance(delay,allpass1,allpass2,out,out1,out2,in1,coeff)
+(
+  out = delay.delayline_get() - in * coeff;
+  in1 = in + out * coeff;
+
+  out1 = allpass1.allpass(in1);
+  out2 = allpass2.allpass(out1);
+
+  delay.delayline( out2 );
+  out;
+);
+
+
+
+
+

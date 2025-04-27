@@ -1,0 +1,142 @@
+desc:st-verb-library
+
+// a collection of reverb algorithms
+
+@init
+
+function _diffuser1_g(x) (
+  (((-0.0331 * x + 0.3743) * x - 1.0858) * x + 0.7901)
+  );
+
+function _diffuser1_h(x) (
+  ((( 0.0320 * x - 0.3184) * x + 0.3184) * x + 0.7267)
+  );
+  
+
+function diffuser1_init(delay)
+ instance(c0 c1 c2 c3 x0 x1 x2 x3 out)
+(
+  c0 = _diffuser1_g(delay);
+  c1 = _diffuser1_h(delay);
+  c2 = _diffuser1_h(3-delay);
+  c3 = _diffuser1_g(3-delay);
+);
+
+function diffuser1(in)
+ instance(c0 c1 c2 c3 x0 x1 x2 x3 x4 x5 x6 x7 out0 out1)
+(
+  x0 = (in * 0.9 + out1 * 0.1);
+  x1 = x0; x2 = x1; x3 = x2;
+  x4 = x3; x5 = x4; x6 = x5; x7 = x6;
+ 
+  out0 = c0 * x0 + c1 * x1 + c2 * x2 + c3 * x3;
+  out1 = (x4 + x5 + x6) * 0.3333;
+  
+  (in + out0)*0.5;
+);
+
+
+function delayline_init(buffer,len,diffdelay)
+ instance(buf,size)
+(
+  this.diff0.diffuser1_init(diffdelay);
+//  this.diff1.diffuser1_init(diffdelay*0.9);
+//  this.diff2.diffuser1_init(diffdelay*0.7);
+  
+  size = (len * 0.001 * srate)|0;
+  buf = buffer;
+  buf + size;
+);
+
+
+function delayline_get()
+ instance(buf,ptr)
+(
+  buf[ptr];
+);
+
+function delayline(in)
+ instance(buf,ptr,size,out)
+(
+  in = this.diff0.diffuser1(in);
+//  in = this.diff1.diffuser1(in);
+//  in = this.diff2.diffuser1(in);
+  out = buf[ptr];
+  buf[ptr] = in;
+  ptr += 1;
+  ptr >= size ? ptr -= size;
+  out;
+);
+
+
+function allpass_init(buffer,len,coff,diffdelay)
+ instance(coeff,delay)
+ local(t)
+(
+  t = delay.delayline_init(buffer,len,diffdelay);
+  coeff = coff;
+  t;
+);
+
+
+function allpass(in)
+ instance(buf,size,coeff,ptr,out,delay)
+(
+  out = delay.delayline_get() - in * coeff;
+  delay.delayline( in + out * coeff );
+  out;
+);
+
+
+function nested_allpass1_init(buffer,len0,len1,coff0,coff1,diffdelay1,diffdelay2)
+ instance(delay,allpass1,coeff)
+ local(t)
+(
+  coeff = coff0;
+  t = delay.delayline_init(buffer,len0,diffdelay1);
+  t = allpass1.allpass_init(t,len1,coff1,diffdelay2);
+);
+
+
+function nested_allpass1(in)
+ instance(delay,allpass1,coeff,out,out1,in1)
+(
+  out = delay.delayline_get() - in * coeff;
+  in1 = in + out * coeff;
+
+  out1 = allpass1.allpass(in1);
+
+  delay.delayline( out1 );
+  out;
+);
+
+
+function nested_allpass2_init(buffer,
+		len0,len1,len2,coff0,coff1,coff2,diff0,diff1,diff2)
+ instance(delay,allpass1,allpass2,coeff,out0,out1)
+ local(t)
+(
+  coeff = coff0;
+  t = delay.delayline_init(buffer,len0,diff0);
+  t = allpass1.allpass_init(t,len1,coff1,diff1);
+  t = allpass2.allpass_init(t,len2,coff2,diff2);
+);
+
+
+function nested_allpass2(in)
+ instance(delay,allpass1,allpass2,out,out1,out2,in1,coeff)
+(
+  out = delay.delayline_get() - in * coeff;
+  in1 = in + out * coeff;
+
+  out1 = allpass1.allpass(in1);
+  out2 = allpass2.allpass(out1);
+
+  delay.delayline( out2 );
+  out;
+);
+
+
+
+
+

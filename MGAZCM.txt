@@ -1,0 +1,229 @@
+desc:sault ::: MGAZCM limiter/maximizer
+
+// brickwall limiter/zero-crossing maximizer
+// v 1.0
+//
+// containing code from
+//
+// MGA JS Limiter				(C) 2008  Michael Gruhn
+// Zero Crossing Maximizer		(C) 2006-2007, Michael Gruhn.
+// oversampling code inspired by Tale/oversampler.jsfx-inc
+//
+//author: LOSER
+//remixer: Sault
+//
+//
+
+slider1:0<-30,0,0.1>Threshold (dB)
+slider2:300<0,500,1>Release (ms)
+slider3:-0.1<-6,0,0.1>Ceiling
+slider4:500<250,1000,1>Buffer Size (ms)
+slider5:0<0,2,1{1x,2x,4x}>Oversampling
+
+import libs/st-oversampler.jsfx-inc
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+
+// zero-maximizer code
+
+buffer = 0;
+pdc_bot_ch=0; pdc_top_ch=2;
+
+
+function maximizer(spl)
+ instance(buffer,bufPos,s0,maxSpl,lastS0,gain,adjPos,length)
+(
+  buffer[bufPos] = spl;
+
+  // track zero crossings
+  spl > 0 ? s0=1 : s0=0;
+
+  maxSpl = max( maxSpl, abs(spl));
+
+  s0 != lastS0 ? (
+    maxSpl > mthresh ? gain=mthresh/maxSpl : gain=1;
+    adjPos = length;
+
+    loop(length+1,
+      buffer[bufPos - adjPos + ((bufPos-adjPos)<0 ? bufSize+1:0;) ] *= gain;
+      (adjPos -= 1);
+      );
+
+    length = -1;
+    maxSpl = 0;
+    );
+  (length += 1) > bufSize ? length = maxSpl = 0;
+  lastS0 = s0;
+  
+  (bufPos += 1) > bufSize ? bufPos = 0;
+  buffer[bufPos] * mvolume;
+);
+
+function process(max)
+ instance(gain)
+(
+  (r1Timer+=1) > HOLDTIME*oversample ? (r1Timer = 0; max1Block = 0; );
+  max1Block = max(max1Block,max);
+  (r2Timer+=1) > HOLDTIME*oversample ? (r2Timer = 0; max2Block = 0; );
+  max2Block = max(max2Block,max);
+  envT = max(max1Block,max2Block);
+  env = env < envT ? envT : envT + r*(env-envT);
+  (env > thresh) ? gain = (g_meter=(thresh / env))*volume : (g_meter=1; gain=volume;);
+  gain;
+);
+
+function detect(a,b) ( max(abs(a),abs(b)); );
+
+oversample_old = 0;
+
+@slider
+thresh = 10^(slider1/20);
+ceiling = 10^(slider3/20);
+volume = ceiling/thresh;
+oversample = 2^slider5;
+
+oversample != oversample_old ? (
+  HOLDTIME = srate*oversample/128;
+
+  r1Timer = 0;
+  r2Timer = HOLDTIME/2;
+
+  gr_meter=1;
+  gr_meter_decay = exp(1/(1*srate*oversample));
+  oversample_old = oversample;
+);
+
+release = slider2/1000;
+r = exp(-3/(srate*oversample*max(release,0.05)));
+
+
+// zero-maximizer
+
+//sliderscale = -sqrt(abs(slider3 - slider1));
+mthresh = 10^((0.25*slider1 + 0.75*slider3)/20);
+//mthresh = 10^(sliderscale/20);
+mvolume = ceiling/mthresh;
+pdc_delay = bufSize = floor(min(slider4/1000 * oversample * srate,500000));
+max0.buffer = 0;
+max1.buffer = bufSize + 1;
+
+// add oversampling offset to pdc_delay
+
+slider5 == 1 ? pdc_delay += 19;
+slider5 == 2 ? pdc_delay += 31;
+
+
+
+@sample
+
+slider5 == 0 ? (
+  det = detect(spl0,spl1);
+  os0.process(det);
+  
+  spl0 *= os0.gain;
+  spl1 *= os0.gain;
+
+  );
+
+slider5 == 1 ? (
+
+  os1.os_up2(spl0);
+  os2.os_up2(spl1);
+  
+  det = detect(os1.y1,os2.y1);
+  os1.process(det);
+  os1.y1 *= os1.gain;
+  os2.y1 *= os1.gain;
+
+  det = detect(os1.y0,os2.y0);
+  os1.process(det);
+  os1.y0 *= os1.gain;
+  os2.y0 *= os1.gain;
+
+  spl0 = os1.os_down2();
+  spl1 = os2.os_down2();
+
+  );
+  
+slider5 == 2 ? (
+
+  os3.os_up4(spl0);
+  os4.os_up4(spl1);
+
+  det = detect(os3.y3,os4.y3);
+  os3.process(det);
+  os3.y3 *= os3.gain;
+  os4.y3 *= os3.gain;
+
+  det = detect(os3.y2,os4.y2);
+  os3.process(det);
+  os3.y2 *= os3.gain;
+  os4.y2 *= os3.gain;
+
+  det = detect(os3.y1,os4.y1);
+  os3.process(det);
+  os3.y1 *= os3.gain;
+  os4.y1 *= os3.gain;
+  
+  det = detect(os3.y0,os4.y0);
+  os3.process(det);
+  os3.y0 *= os3.gain;
+  os4.y0 *= os3.gain;
+
+  spl0 = os3.os_down4();
+  spl1 = os4.os_down4();
+  
+  );
+
+g_meter < gr_meter ? gr_meter=g_meter : ( gr_meter*=gr_meter_decay; gr_meter>1?gr_meter=1; );
+
+
+// Zero Maximizer code
+
+  spl0 = max0.maximizer(spl0);
+  spl1 = max1.maximizer(spl1);
+
+
+@gfx 0 32 // request horizontal/vertical heights (0 means dont care)
+
+  gr_meter *= exp(1/30); gr_meter>1?gr_meter=1; // decay meter here so if the audio processing stops it doesnt "stick"
+  gfx_r=1; gfx_g=gfx_b=0; gfx_a=0.8;
+  
+  meter_bot=20;
+  meter_h=min(gfx_h,32);
+  xscale=gfx_w*20/meter_bot;
+
+  gfx_y=0;
+  gfx_x=gfx_w + log10(gr_meter)*xscale;
+  gfx_rectto(gfx_w,meter_h);
+
+  gfx_r=gfx_g=gfx_b=1.0; gfx_a=0.6;
+
+  s2=sqrt(2)/2;
+  g = s2;
+  while(
+    gfx_x=gfx_w + log10(g)*xscale;
+    gfx_x >= 0 ? 
+    (
+      gfx_y=0;
+      gfx_lineto(gfx_x,meter_h,0);
+      gfx_y=meter_h-gfx_texth;
+      gfx_x+=2;
+      gfx_drawnumber(log10(g)*20,0);
+      gfx_drawchar($'d');
+      gfx_drawchar($'B');
+    );
+    g*=s2;
+    gfx_x >=0;
+  );
+  gfx_a=1;
+
+  gfx_x=0; gfx_y=meter_h/2 - gfx_texth/2;
+  gfx_drawnumber(log10(gr_meter)*20,1);
+  gfx_drawchar($'d');
+  gfx_drawchar($'B');

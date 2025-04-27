@@ -1,0 +1,142 @@
+desc:sault :: elliptic clipper
+
+slider1:1<0,4,1{off,2x,4x,8x,16x}>oversample
+slider4:0<0,15,0.1>boost
+
+
+import elliptic-oversampler.jsfx-inc
+
+@init
+
+function tanh(x) local(exp2x) ( exp2x = exp(2*x); (exp2x-1)/(exp2x+1); );
+
+os0.os_init2();
+os1.os_init2();
+
+os2.os_init4();
+os3.os_init4();
+
+os4.os_init8();
+os5.os_init8();
+
+os6.os_init16();
+os7.os_init16();
+
+@slider
+
+boost = 10^(slider4 * 0.05);
+
+@sample
+
+spl0 *= boost;
+spl1 *= boost;
+
+slider1 == 0 ? (
+
+  spl0 = tanh(spl0);
+  spl1 = tanh(spl1);
+
+  );
+  
+slider1 == 1 ? (
+
+  os0.os_up2(spl0);
+  os1.os_up2(spl1);
+
+  os0.y1 = tanh(os0.y1);
+  os0.y0 = tanh(os0.y0);
+  os1.y1 = tanh(os1.y1);
+  os1.y0 = tanh(os1.y0);
+
+  spl0 = os0.os_down2();
+  spl1 = os1.os_down2();
+  );
+
+slider1 == 2 ? (
+
+  os2.os_up4(spl0);
+  os3.os_up4(spl1);
+
+  os2.y3 = tanh(os2.y3);
+  os2.y2 = tanh(os2.y2);
+  os2.y1 = tanh(os2.y1);
+  os2.y0 = tanh(os2.y0);
+  os3.y3 = tanh(os3.y3);
+  os3.y2 = tanh(os3.y2);
+  os3.y1 = tanh(os3.y1);
+  os3.y0 = tanh(os3.y0);
+
+  spl0 = os2.os_down4();
+  spl1 = os3.os_down4();
+  );
+
+slider1 == 3 ? (
+
+  os4.os_up8(spl0);
+  os5.os_up8(spl1);
+
+  os4.y7 = tanh(os4.y7);
+  os4.y6 = tanh(os4.y6);
+  os4.y5 = tanh(os4.y5);
+  os4.y4 = tanh(os4.y4);
+  os4.y3 = tanh(os4.y3);
+  os4.y2 = tanh(os4.y2);
+  os4.y1 = tanh(os4.y1);
+  os4.y0 = tanh(os4.y0);
+  os5.y7 = tanh(os5.y7);
+  os5.y6 = tanh(os5.y6);
+  os5.y5 = tanh(os5.y5);
+  os5.y4 = tanh(os5.y4);
+  os5.y3 = tanh(os5.y3);
+  os5.y2 = tanh(os5.y2);
+  os5.y1 = tanh(os5.y1);
+  os5.y0 = tanh(os5.y0);
+
+  spl0 = os4.os_down8();
+  spl1 = os5.os_down8();
+  );
+
+slider1 == 4 ? (
+
+  os6.os_up16(spl0);
+  os7.os_up16(spl1);
+
+  os6.y15 = tanh(os6.y15);
+  os6.y14 = tanh(os6.y14);
+  os6.y13 = tanh(os6.y13);
+  os6.y12 = tanh(os6.y12);
+  os6.y11 = tanh(os6.y11);
+  os6.y10 = tanh(os6.y10);
+  os6.y9 = tanh(os6.y9);
+  os6.y8 = tanh(os6.y8);
+  os6.y7 = tanh(os6.y7);
+  os6.y6 = tanh(os6.y6);
+  os6.y5 = tanh(os6.y5);
+  os6.y4 = tanh(os6.y4);
+  os6.y3 = tanh(os6.y3);
+  os6.y2 = tanh(os6.y2);
+  os6.y1 = tanh(os6.y1);
+  os6.y0 = tanh(os6.y0);
+
+  os7.y15 = tanh(os7.y15);
+  os7.y14 = tanh(os7.y14);
+  os7.y13 = tanh(os7.y13);
+  os7.y12 = tanh(os7.y12);
+  os7.y11 = tanh(os7.y11);
+  os7.y10 = tanh(os7.y10);
+  os7.y9 = tanh(os7.y9);
+  os7.y8 = tanh(os7.y8);
+  os7.y7 = tanh(os7.y7);
+  os7.y6 = tanh(os7.y6);
+  os7.y5 = tanh(os7.y5);
+  os7.y4 = tanh(os7.y4);
+  os7.y3 = tanh(os7.y3);
+  os7.y2 = tanh(os7.y2);
+  os7.y1 = tanh(os7.y1);
+  os7.y0 = tanh(os7.y0);
+
+  spl0 = os6.os_down16();
+  spl1 = os7.os_down16();
+
+  );
+ 
